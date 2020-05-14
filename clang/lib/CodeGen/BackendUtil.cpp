@@ -231,6 +231,11 @@ static bool asanUseGlobalsGC(const Triple &T, const CodeGenOptions &CGOpts) {
   }
 }
 
+static void addAasanSanitizerPasses(const PassManagerBuilder &Builder,
+									  legacy::PassManagerBase &PM) {
+ // can include other passes in here
+}
+
 static void addAddressSanitizerPasses(const PassManagerBuilder &Builder,
                                       legacy::PassManagerBase &PM) {
   const PassManagerBuilderWrapper &BuilderWrapper =

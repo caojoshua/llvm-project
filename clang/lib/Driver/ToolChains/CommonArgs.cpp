@@ -556,6 +556,9 @@ static void addSanitizerLibPath(const ToolChain &TC, const ArgList &Args,
 void tools::addSanitizerPathLibArgs(const ToolChain &TC, const ArgList &Args,
                                     ArgStringList &CmdArgs) {
   const SanitizerArgs &SanArgs = TC.getSanitizerArgs();
+  if (SanArgs.needsAasanRt()) {
+	  addSanitizerLibPath(TC, Args, CmdArgs, "aasan");
+  }
   if (SanArgs.needsAsanRt()) {
     addSanitizerLibPath(TC, Args, CmdArgs, "asan");
   }
@@ -610,6 +613,9 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
   const SanitizerArgs &SanArgs = TC.getSanitizerArgs();
   // Collect shared runtimes.
   if (SanArgs.needsSharedRt()) {
+	if (SanArgs.needsAasanRt()) {
+	  SharedRuntimes.push_back("aasan");
+	}
     if (SanArgs.needsAsanRt()) {
       SharedRuntimes.push_back("asan");
       if (!Args.hasArg(options::OPT_shared) && !TC.getTriple().isAndroid())
@@ -639,6 +645,9 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
   if (Args.hasArg(options::OPT_shared) || SanArgs.needsSharedRt()) {
     // Don't link static runtimes into DSOs or if -shared-libasan.
     return;
+  }
+  if (SanArgs.needsAasanRt()) {
+	StaticRuntimes.push_back("aasan");
   }
   if (SanArgs.needsAsanRt()) {
     StaticRuntimes.push_back("asan");

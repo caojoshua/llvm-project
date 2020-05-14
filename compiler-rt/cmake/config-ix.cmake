@@ -225,6 +225,7 @@ endif()
 
 set(ALL_SANITIZER_COMMON_SUPPORTED_ARCH ${X86} ${X86_64} ${PPC64}
     ${ARM32} ${ARM64} ${MIPS32} ${MIPS64} ${S390X})
+set(ALL_AASAN_SUPPORTED_ARCH ${X86} ${X86_64})
 set(ALL_ASAN_SUPPORTED_ARCH ${X86} ${X86_64} ${ARM32} ${ARM64}
     ${MIPS32} ${MIPS64} ${PPC64} ${S390X})
 set(ALL_DFSAN_SUPPORTED_ARCH ${X86_64} ${MIPS64} ${ARM64})
@@ -421,6 +422,10 @@ if(APPLE)
     ALL_SANITIZER_COMMON_SUPPORTED_ARCH
     COMPILER_RT_SUPPORTED_ARCH
     )
+  
+  list_intersect(AASAN_SUPPORTED_ARCH
+	  ALL_AASAN_SUPPORTED_ARCH
+	SANITIZER_COMMON_SUPPORTED_ARCH)
   set(LSAN_COMMON_SUPPORTED_ARCH ${SANITIZER_COMMON_SUPPORTED_ARCH})
   set(UBSAN_COMMON_SUPPORTED_ARCH ${SANITIZER_COMMON_SUPPORTED_ARCH})
   list_intersect(ASAN_SUPPORTED_ARCH
@@ -473,6 +478,9 @@ else()
   # Architectures supported by compiler-rt libraries.
   filter_available_targets(SANITIZER_COMMON_SUPPORTED_ARCH
     ${ALL_SANITIZER_COMMON_SUPPORTED_ARCH})
+  filter_available_targets(AASAN_SUPPORTED_ARCH
+	${SANITIZER_COMMON_SUPPORTED_ARCH})
+  message([STATUS] "after filer" ${AASAN_SUPPORTED_ARCH})
   # LSan and UBSan common files should be available on all architectures
   # supported by other sanitizers (even if they build into dummy object files).
   filter_available_targets(LSAN_COMMON_SUPPORTED_ARCH
@@ -523,7 +531,7 @@ else()
   set(OS_NAME "${CMAKE_SYSTEM_NAME}")
 endif()
 
-set(ALL_SANITIZERS asan;dfsan;msan;hwasan;tsan;safestack;cfi;esan;scudo;ubsan_minimal)
+set(ALL_SANITIZERS asan;dfsan;msan;hwasan;tsan;safestack;cfi;esan;scudo;ubsan_minimal;aasan)
 set(COMPILER_RT_SANITIZERS_TO_BUILD all CACHE STRING
     "sanitizers to build if supported on the target (all;${ALL_SANITIZERS})")
 list_replace(COMPILER_RT_SANITIZERS_TO_BUILD all "${ALL_SANITIZERS}")
@@ -663,4 +671,13 @@ if (COMPILER_RT_HAS_SANITIZER_COMMON AND SHADOWCALLSTACK_SUPPORTED_ARCH AND
   set(COMPILER_RT_HAS_SHADOWCALLSTACK TRUE)
 else()
   set(COMPILER_RT_HAS_SHADOWCALLSTACK FALSE)
+endif()
+
+if (COMPILER_RT_HAS_SANITIZER_COMMON AND AASAN_SUPPORTED_ARCH AND
+	OS_NAME MATCHES "Linux")
+  set(COMPILER_RT_HAS_AASAN TRUE)
+  message(STATUS COMPILER_RT HAS AASAN:TRUE)
+else()
+  set(COMPILER_RT_HAS_AASAN FALSE)
+  message(STATUS COMPILER_RT_HAS AASAN:FALSE)
 endif()
