@@ -14,7 +14,6 @@ set(AASAN_COMMON_FLAGS ${SANITIZER_COMMON_FLAGS})
 add_compiler_rt_component(aasan)
 
 foreach(arch ${AASAN_SUPPORTED_ARCH})
-	message([STATUS] "arch ${arch}")
 	set(AASAN_CFLAGS ${AASAN_COMMON_FLAGS})
 	append_list_if(COMPILER_RT_HAS_FPIE_FLAG -fPIE AASAN_CFLAGS)
 	add_compiler_rt_runtime(clang_rt.aasan

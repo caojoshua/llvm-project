@@ -647,7 +647,7 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
     return;
   }
   if (SanArgs.needsAasanRt()) {
-	StaticRuntimes.push_back("aasan");
+    StaticRuntimes.push_back("aasan");
   }
   if (SanArgs.needsAsanRt()) {
     StaticRuntimes.push_back("asan");
