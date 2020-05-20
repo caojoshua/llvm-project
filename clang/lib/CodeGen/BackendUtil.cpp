@@ -231,9 +231,9 @@ static bool asanUseGlobalsGC(const Triple &T, const CodeGenOptions &CGOpts) {
   }
 }
 
-static void addAasanSanitizerPasses(const PassManagerBuilder &Builder,
+static void addAliasAnalysisSanitizerPasses(const PassManagerBuilder &Builder,
 									  legacy::PassManagerBase &PM) {
- // can include other passes in here
+  PM.add(createAliasAnalysisSanitizerPass());
 }
 
 static void addAddressSanitizerPasses(const PassManagerBuilder &Builder,
@@ -609,6 +609,14 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
     PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
                            addAddressSanitizerPasses);
   }
+
+  if (LangOpts.Sanitize.has(SanitizerKind::Aasan)) {
+    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                           addAliasAnalysisSanitizerPasses);
+    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
+                           addAliasAnalysisSanitizerPasses);
+  }
+    
 
   if (LangOpts.Sanitize.has(SanitizerKind::KernelAddress)) {
     PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,

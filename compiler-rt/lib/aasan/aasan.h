@@ -2,9 +2,10 @@
 #include "interception/interception.h"
 #include "sanitizer_common/sanitizer_linux.h" 
 
-extern "C" {
-	// can define hooks here
-}
+void MemAllocHook();
+void PointerDefHook();
+void StoreHook();
+
 void *aasan_Malloc(__sanitizer::uptr size);
 void aasan_InitInterceptors(); 
 
