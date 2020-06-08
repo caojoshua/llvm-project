@@ -949,6 +949,13 @@ void SanitizerArgs::addArgs(const ToolChain &TC, const llvm::opt::ArgList &Args,
                                Sanitizers.Mask & CFIClasses)
         << "-fvisibility=";
   }
+
+  // TODO: figure out how to properly automate passing args to clang
+  if (Sanitizers.has(Aasan)) {
+//     CmdArgs.push_back("$(llvm-config --ldflags)");
+//     CmdArgs.push_back("-lLLVMSupport");
+//     CmdArgs.push_back("-lAliasAnalysisSanitizer");
+  }
 }
 
 SanitizerMask parseArgValues(const Driver &D, const llvm::opt::Arg *A,

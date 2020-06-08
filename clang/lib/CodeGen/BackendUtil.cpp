@@ -15,6 +15,7 @@
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/Utils.h"
 #include "clang/Lex/HeaderSearchOptions.h"
+#include "llvm/Aasan/Aasan.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -233,6 +234,7 @@ static bool asanUseGlobalsGC(const Triple &T, const CodeGenOptions &CGOpts) {
 
 static void addAliasAnalysisSanitizerPasses(const PassManagerBuilder &Builder,
 									  legacy::PassManagerBase &PM) {
+  PM.add(createAasanIDAnalysisPass());
   PM.add(createAliasAnalysisSanitizerPass());
 }
 

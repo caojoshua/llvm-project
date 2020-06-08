@@ -71,14 +71,17 @@ bool AliasAnalysisSanitizerPass::doInitialization(Module &M) {
 
   // PointerDefHook definition
   Params.clear();
-  Params.push_back(PointerTy);
+  Params.push_back(LongTy);
   Params.push_back(PointerTy);
   FunctionType *PointerDefHookType = FunctionType::get(VoidTy, Params, false);
   PointerDefHook = dyn_cast<Function>(
       M.getOrInsertFunction(PointerDefHookName, PointerDefHookType));
 
   // StoreHook definition
-  FunctionType *StoreHookType = PointerDefHookType;
+  Params.clear();
+  Params.push_back(PointerTy);
+  Params.push_back(PointerTy);
+  FunctionType *StoreHookType = FunctionType::get(VoidTy, Params, false);
   StoreHook =
       dyn_cast<Function>(M.getOrInsertFunction(StoreHookName, StoreHookType));
 
@@ -154,15 +157,22 @@ void AliasAnalysisSanitizerPass::instrumentPointer(Module &M,
   }
 
   std::vector<Value *> Args;
-  Args.push_back(new BitCastInst(&*I, PointerTy, "", &*Loc));
-  if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
-    Args.push_back(
-        new BitCastInst(LI->getPointerOperand(), PointerTy, "", &*Loc));
-  } else {
-    Args.push_back(ConstantPointerNull::get(PointerTy));
+  if (MDNode *Metadata = I->getMetadata("PointerID")) {
+    Constant *C =
+        dyn_cast<ConstantAsMetadata>(Metadata->getOperand(0))->getValue();
+    if (ConstantInt *PointerID = dyn_cast<ConstantInt>(C)) {
+      Args.push_back(ConstantInt::get(LongTy, PointerID->getZExtValue()));
+      if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
+        Args.push_back(
+            new BitCastInst(LI->getPointerOperand(), PointerTy, "", &*Loc));
+      } else {
+        Args.push_back(ConstantPointerNull::get(PointerTy));
+      }
+      CallInst::Create(PointerDefHook, Args, "", &*Loc);
+    }
   }
-  CallInst::Create(PointerDefHook, Args, "", &*Loc);
   I = Loc;
+  --I;
 }
 
 void AliasAnalysisSanitizerPass::instrumentAlloca(Module &M, AllocaInst *AI,

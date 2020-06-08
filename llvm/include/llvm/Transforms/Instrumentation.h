@@ -155,7 +155,7 @@ ModulePass *createAddressSanitizerModulePass(bool CompileKernel = false,
 FunctionPass *createHWAddressSanitizerPass(bool CompileKernel = false,
                                            bool Recover = false);
 
-// Insert AliasAnalysisSanitizer instrumentation
+// Insert AliasAnalysisSanitizer Instrumentation
 ModulePass *createAliasAnalysisSanitizerPass();
 
 // Insert DataFlowSanitizer (dynamic data flow analysis) instrumentation
