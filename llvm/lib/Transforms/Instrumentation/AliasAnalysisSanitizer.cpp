@@ -162,12 +162,7 @@ void AliasAnalysisSanitizerPass::instrumentPointer(Module &M,
         dyn_cast<ConstantAsMetadata>(Metadata->getOperand(0))->getValue();
     if (ConstantInt *PointerID = dyn_cast<ConstantInt>(C)) {
       Args.push_back(ConstantInt::get(LongTy, PointerID->getZExtValue()));
-      if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
-        Args.push_back(
-            new BitCastInst(LI->getPointerOperand(), PointerTy, "", &*Loc));
-      } else {
-        Args.push_back(ConstantPointerNull::get(PointerTy));
-      }
+      Args.push_back(new BitCastInst(&*I, PointerTy, "", &*Loc));
       CallInst::Create(PointerDefHook, Args, "", &*Loc);
     }
   }
