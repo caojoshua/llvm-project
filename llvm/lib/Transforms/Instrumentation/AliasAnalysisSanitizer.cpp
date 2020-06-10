@@ -25,10 +25,12 @@ struct AliasAnalysisSanitizerPass : public ModulePass {
   static const std::string MemAllocHookName;
   static const std::string PointerDefHookName;
   static const std::string StoreHookName;
+  static const std::string WriteRecordsHookName;
 
   Function *MemAllocHook;
   Function *PointerDefHook;
   Function *StoreHook;
+  Function *WriteRecordsHook;
 
   PointerType *PointerTy;
   Type *VoidTy;
@@ -42,6 +44,7 @@ struct AliasAnalysisSanitizerPass : public ModulePass {
   void instrumentStore(StoreInst *SI);
   void instrumentPointer(Module &M, BasicBlock::iterator &I);
   void instrumentAlloca(Module &M, AllocaInst *AI, BasicBlock::iterator &Loc);
+  void instrumentExitMain(BasicBlock::iterator &I);
 };
 } // namespace
 
@@ -53,6 +56,8 @@ const std::string AliasAnalysisSanitizerPass::MemAllocHookName = "MemAllocHook";
 const std::string AliasAnalysisSanitizerPass::PointerDefHookName =
     "PointerDefHook";
 const std::string AliasAnalysisSanitizerPass::StoreHookName = "StoreHook";
+const std::string AliasAnalysisSanitizerPass::WriteRecordsHookName =
+    "WriteRecordsHook";
 
 bool AliasAnalysisSanitizerPass::doInitialization(Module &M) {
   LLVMContext &Context = M.getContext();
@@ -85,6 +90,12 @@ bool AliasAnalysisSanitizerPass::doInitialization(Module &M) {
   StoreHook =
       dyn_cast<Function>(M.getOrInsertFunction(StoreHookName, StoreHookType));
 
+  // WriteRecords definition
+  Params.clear();
+  FunctionType *WriteRecordsType = FunctionType::get(VoidTy, Params, false);
+  WriteRecordsHook = dyn_cast<Function>(
+      M.getOrInsertFunction(WriteRecordsHookName, WriteRecordsType));
+
   return true;
 }
 
@@ -112,6 +123,12 @@ bool AliasAnalysisSanitizerPass::runOnModule(Module &M) {
 
         if (I->getType()->isPointerTy()) {
           instrumentPointer(M, I);
+        }
+
+        // assuming Ret and Resume are the only instructions that exit a function...is this accurate?
+        if ((isa<ReturnInst>(I) || isa<ResumeInst>(I)) &&
+            F.getName().compare("main") == 0) {
+          instrumentExitMain(I);
         }
       }
     }
@@ -182,6 +199,11 @@ void AliasAnalysisSanitizerPass::instrumentAlloca(Module &M, AllocaInst *AI,
   Args.push_back(new BitCastInst(&*AI, PointerTy, "", &*Loc));
   Args.push_back(v);
   CallInst::Create(MemAllocHook, Args, "", &*Loc);
+}
+
+// instrument call to write all records before exiting main
+void AliasAnalysisSanitizerPass::instrumentExitMain(BasicBlock::iterator &I) {
+  CallInst::Create(WriteRecordsHook, "", &*I);
 }
 
 ModulePass *llvm::createAliasAnalysisSanitizerPass() {

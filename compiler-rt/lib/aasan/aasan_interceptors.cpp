@@ -1,6 +1,5 @@
 #include "aasan_interceptors.h"
 #include "interception/interception.h"
-#include "aasan_hooks.h"
 
 using namespace __sanitizer;
 
