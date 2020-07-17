@@ -760,6 +760,10 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
     SafeStackRuntime = !TC.getTriple().isOSFuchsia();
   }
 
+  AasanOfflineDetection = Args.hasFlag(options::OPT_faasan_offline_detection,
+                                      options::OPT_fno_aasan_offline_detection,
+                                      AasanOfflineDetection);
+
   // Parse -link-cxx-sanitizer flag.
   LinkCXXRuntimes =
       Args.hasArg(options::OPT_fsanitize_link_cxx_runtime) || D.CCCIsCXX();
@@ -931,6 +935,9 @@ void SanitizerArgs::addArgs(const ToolChain &TC, const llvm::opt::ArgList &Args,
     CmdArgs.push_back("-default-function-attr");
     CmdArgs.push_back(Args.MakeArgString("hwasan-abi=" + HwasanAbi));
   }
+
+  if (AasanOfflineDetection)
+    CmdArgs.push_back("-faasan-offline-detection");
 
   // MSan: Workaround for PR16386.
   // ASan: This is mainly to help LSan with cases such as

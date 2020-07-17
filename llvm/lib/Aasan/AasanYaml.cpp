@@ -1,6 +1,6 @@
 #include "llvm/Aasan/AasanYaml.h"
 
-//using namespace llvm;
+using namespace llvm;
 
 StringRef AasanRecord::Tag = "";
 StringRef MemAllocRecord::Tag = "MemAlloc";

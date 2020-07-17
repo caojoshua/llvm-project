@@ -3,4 +3,5 @@
 
 namespace llvm {
 FunctionPass *createAasanIDAnalysisPass();
+ModulePass *createAasanOfflineDetectionPass();
 }

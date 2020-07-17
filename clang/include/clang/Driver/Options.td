@@ -969,6 +969,12 @@ def fsanitize_memory_use_after_dtor : Flag<["-"], "fsanitize-memory-use-after-dt
 def fno_sanitize_memory_use_after_dtor : Flag<["-"], "fno-sanitize-memory-use-after-dtor">,
                                      Group<f_clang_Group>,
                                      HelpText<"Disable use-after-destroy detection in MemorySanitizer">;
+def faasan_offline_detection : Flag<["-"], "faasan-offline-detection">,
+                                        Group<f_clang_Group>,
+                                        HelpText<"Enable the offline detection step in Alias Analysis Sanitizer">;
+def fno_aasan_offline_detection : Flag<["-"], "fno-aasan-offline-detection">,
+                                        Group<f_clang_Group>,
+                                        HelpText<"Disable the offline detection step in Alias Analysis Sanitizer">;
 def fsanitize_address_field_padding : Joined<["-"], "fsanitize-address-field-padding=">,
                                         Group<f_clang_Group>,
                                         HelpText<"Level of field padding for AddressSanitizer">;

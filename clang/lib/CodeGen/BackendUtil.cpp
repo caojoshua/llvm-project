@@ -234,8 +234,16 @@ static bool asanUseGlobalsGC(const Triple &T, const CodeGenOptions &CGOpts) {
 
 static void addAliasAnalysisSanitizerPasses(const PassManagerBuilder &Builder,
 									  legacy::PassManagerBase &PM) {
-  PM.add(createAasanIDAnalysisPass());
-  PM.add(createAliasAnalysisSanitizerPass());
+  const PassManagerBuilderWrapper &BuilderWrapper =
+      static_cast<const PassManagerBuilderWrapper&>(Builder);
+  const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
+  bool AasanOfflineDetection = CGOpts.AasanOfflineDetection;
+  if (AasanOfflineDetection) {
+    PM.add(createAasanOfflineDetectionPass());
+  } else {
+    PM.add(createAasanIDAnalysisPass());
+    PM.add(createAliasAnalysisSanitizerPass());
+  }
 }
 
 static void addAddressSanitizerPasses(const PassManagerBuilder &Builder,

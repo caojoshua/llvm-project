@@ -3,6 +3,15 @@ add_llvm_library( LLVMAliasAnalysisSanitizer
   AasanYaml.cpp
   AasanIDAnalysis.cpp
 
-  PLUGIN_TOOL
-  opt
+  DEPENDS
+  LLVMCore
+  LLVMSupport
+  LLVMObjectYAML
+
+  LINK_LIBS
+  LLVMCore
+  LLVMSupport
+  LLVMObjectYAML
   )
+
+

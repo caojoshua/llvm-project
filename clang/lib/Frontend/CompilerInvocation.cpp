@@ -1104,6 +1104,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.SanitizeCfiICallGeneralizePointers =
       Args.hasArg(OPT_fsanitize_cfi_icall_generalize_pointers);
   Opts.SanitizeStats = Args.hasArg(OPT_fsanitize_stats);
+  Opts.AasanOfflineDetection = Args.hasArg(OPT_faasan_offline_detection);
   if (Arg *A = Args.getLastArg(
           OPT_fsanitize_address_poison_custom_array_cookie,
           OPT_fno_sanitize_address_poison_custom_array_cookie)) {

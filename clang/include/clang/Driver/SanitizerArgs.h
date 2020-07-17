@@ -35,6 +35,7 @@ class SanitizerArgs {
   bool CfiICallGeneralizePointers = false;
   int AsanFieldPadding = 0;
   bool SharedRuntime = false;
+  bool AasanOfflineDetection = false;
   bool AsanUseAfterScope = true;
   bool AsanPoisonCustomArrayCookie = false;
   bool AsanGlobalsDeadStripping = false;

@@ -53,24 +53,24 @@ struct StoreRecord {
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(AasanRecord *)
 
-template <> struct ScalarTraits<void *> {
+template <> struct yaml::ScalarTraits<void *> {
   static void output(void *const &Value, void *, llvm::raw_ostream &Out);
   static StringRef input(StringRef Scalar, void *, void *&Value);
   static QuotingType mustQuote(StringRef);
 };
 
-template <> struct MappingTraits<AasanRecord *> {
+template <> struct yaml::MappingTraits<AasanRecord *> {
   static void mapping(IO &Io, AasanRecord *&Record);
 };
 
-template <> struct MappingTraits<MemAllocRecord *> {
+template <> struct yaml::MappingTraits<MemAllocRecord *> {
   static void mapping(IO &Io, MemAllocRecord *&Record);
 };
 
-template <> struct MappingTraits<PointerDefRecord *> {
+template <> struct yaml::MappingTraits<PointerDefRecord *> {
   static void mapping(IO &Io, PointerDefRecord *&Record);
 };
 
-template <> struct MappingTraits<StoreRecord *> {
+template <> struct yaml::MappingTraits<StoreRecord *> {
   static void mapping(IO &Io, StoreRecord *&Record);
 };
