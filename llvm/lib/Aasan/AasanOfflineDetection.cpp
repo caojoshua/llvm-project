@@ -1,23 +1,34 @@
-// TODO: this is just some skeleton code
+//===- AasanOfflineDetection.cpp - Offline Detection for Alias Analysis Sanitizer -===//
+//
+// This file defines the offline detection pass for Alias Analysis Sanitizer.
+//
+// Note: The pass must be a function pass because Alias Analyses in LLVM are function 
+// passes and cannot be queried by a ModulePass
+//
+//===----------------------------------------------------------------------===//
+//
 #include "llvm/Aasan/Aasan.h"
+#include "llvm/Aasan/AasanYaml.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Pass.h"
+#include "llvm/PassSupport.h"
 
 #include <fstream>
 
 using namespace llvm;
 
 namespace {
-struct AasanOfflineDetectionPass : public ModulePass {
+struct AasanOfflineDetectionPass : public FunctionPass {
   static char ID;
+  std::vector<AasanRecord *> LogRecords;
 
-  AasanOfflineDetectionPass() : ModulePass(ID) {}
+  AasanOfflineDetectionPass() : FunctionPass(ID) {}
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-  virtual bool runOnModule(Module &M);
+  /* virtual bool runOnModule(Function &M); */
   virtual bool doInitialization(Module &M);
-  //virtual bool runOnFunction(Function &F);
+  virtual bool runOnFunction(Function &F);
 };
 } // namespace
 
@@ -31,26 +42,21 @@ void AasanOfflineDetectionPass::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 bool AasanOfflineDetectionPass::doInitialization(Module &M) {
-  std::string s;
   std::ifstream infile("/home/josh/src/sslab/link_test/with_aasan/aasan.log");
-  errs() << "data\n";
-  while (getline(infile, s)) {
-    /* errs() << s << "\n"; */
-  }
+  std::string str((std::istreambuf_iterator<char>(infile)),
+                  std::istreambuf_iterator<char>());
+  yaml::Input yin(str);
+  yin >> LogRecords;
   return false;
 }
 
-bool AasanOfflineDetectionPass::runOnModule(Module &M) {
-  /*
-  AAResultsWrapperPass &AAwrapper = getAnalysis<AAResultsWrapperPass>();
-  AAResults &AA = AAwrapper.getAAResults(); 
-  */
-  /* AAResultsWrapperPass &AAwrapper = getAnalysis<AAResultsWrapperPass>(); */
-  for (Function &F : M) {
-    errs() << F.getName() << "\n";
+bool AasanOfflineDetectionPass::runOnFunction(Function &F) {
+  AAResultsWrapperPass *AAwrapper =
+      getAnalysisIfAvailable<AAResultsWrapperPass>();
+  if (AAwrapper) {
+    AAResults &AA = AAwrapper->getAAResults();
     for (BasicBlock &B : F) {
       for (Instruction &I1 : B) {
-        /*
         for (Instruction &I2 : B) {
           if (&I1 != &I2) {
             if (AA.alias(&I1, &I2) == MayAlias) {
@@ -58,13 +64,12 @@ bool AasanOfflineDetectionPass::runOnModule(Module &M) {
             }
           }
         }
-        */
       }
     }
   }
   return false;
 }
 
-ModulePass *llvm::createAasanOfflineDetectionPass() {
+FunctionPass *llvm::createAasanOfflineDetectionPass() {
   return new AasanOfflineDetectionPass();
 }

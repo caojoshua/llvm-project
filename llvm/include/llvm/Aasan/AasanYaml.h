@@ -25,9 +25,9 @@ public:
   static bool classof(const AasanRecord *R);
   MemAllocRecord() : MemAllocRecord(0, 0) {}
   MemAllocRecord(void *Addr, __uint64_t Size)
-      : AasanRecord(AasanRecord::MemAllocKind), Addr(Addr), Size(Size) {}
+      : AasanRecord(AasanRecord::MemAllocKind), Addr((long) Addr), Size(Size) {}
   static StringRef Tag;
-  void *Addr;
+  long Addr;
   __uint64_t Size;
 };
 
@@ -37,10 +37,10 @@ public:
   PointerDefRecord() : PointerDefRecord(0, 0) {}
   PointerDefRecord(unsigned long int PointerId, void *Addr)
       : AasanRecord(AasanRecord::PointerDefKind), PointerID(PointerId),
-        Addr(Addr) {}
+        Addr((long) Addr) {}
   static StringRef Tag;
   unsigned long int PointerID;
-  void *Addr;
+  long Addr;
 };
 
 // we probably dont need this
@@ -52,12 +52,6 @@ struct StoreRecord {
 
 
 LLVM_YAML_IS_SEQUENCE_VECTOR(AasanRecord *)
-
-template <> struct yaml::ScalarTraits<void *> {
-  static void output(void *const &Value, void *, llvm::raw_ostream &Out);
-  static StringRef input(StringRef Scalar, void *, void *&Value);
-  static QuotingType mustQuote(StringRef);
-};
 
 template <> struct yaml::MappingTraits<AasanRecord *> {
   static void mapping(IO &Io, AasanRecord *&Record);

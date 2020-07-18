@@ -1,10 +1,11 @@
 #include "llvm/Aasan/AasanYaml.h"
+#include <stdlib.h>
 
 using namespace llvm;
 
 StringRef AasanRecord::Tag = "";
-StringRef MemAllocRecord::Tag = "MemAlloc";
-StringRef PointerDefRecord::Tag = "PtrDef";
+StringRef MemAllocRecord::Tag = "!MemAlloc";
+StringRef PointerDefRecord::Tag = "!PtrDef";
 
 AasanRecord::RecordKind AasanRecord::getKind() const {
   return Kind;
@@ -16,21 +17,6 @@ bool MemAllocRecord::classof(const AasanRecord *R) {
 
 bool PointerDefRecord::classof(const AasanRecord *R) {
   return R->getKind() == AasanRecord::PointerDefKind;
-}
-
-// define a ScalarTrait for pointers because there is no default
-void ScalarTraits<void *>::output(void *const &Value, void *,
-                                  llvm::raw_ostream &out) {
-  out << Value;
-}
-
-StringRef ScalarTraits<void *>::input(StringRef scalar, void *, void *&Value) {
-  // TODO
-  return "bar";
-}
-
-yaml::QuotingType ScalarTraits<void *>::mustQuote(StringRef) {
-  return QuotingType::None;
 }
 
 void MappingTraits<AasanRecord *>::mapping(IO &Io,
@@ -72,6 +58,6 @@ void MappingTraits<PointerDefRecord *>::mapping(IO &Io,
 }
 
 void MappingTraits<StoreRecord *>::mapping(IO &Io, StoreRecord *&Record) {
-  Io.mapRequired("Value", Record->Value);
-  Io.mapRequired("addr", Record->Addr);
+  /* Io.mapRequired("Value", Record->Value); */
+  /* Io.mapRequired("addr", Record->Addr); */
 }
