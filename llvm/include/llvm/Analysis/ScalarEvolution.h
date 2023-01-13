@@ -953,6 +953,8 @@ public:
   /// and recompute is simpler.
   void forgetBlockAndLoopDispositions(Value *V = nullptr);
 
+  APInt getMaxConstantTripMultiple(const SCEV *S);
+
   /// Determine the minimum number of zero bits that S is guaranteed to end in
   /// (at every loop iteration).  It is, at the same time, the minimum number
   /// of times S is divisible by 2.  For example, given {4,+,8} it returns 2.
@@ -1356,13 +1358,14 @@ private:
   /// predicate by splitting it into a set of independent predicates.
   bool ProvingSplitPredicate = false;
 
-  /// Memoized values for the GetMinTrailingZeros
-  DenseMap<const SCEV *, uint32_t> MinTrailingZerosCache;
+  /// Memoized values for the GetMaxConstantTripMultiple
+  DenseMap<const SCEV *, APInt> MaxConstantTripMultipleCache;
 
   /// Return the Value set from which the SCEV expr is generated.
   ArrayRef<Value *> getSCEVValues(const SCEV *S);
 
-  /// Private helper method for the GetMinTrailingZeros method
+  /// Private helper method for the GetMaxConstantTripMultiple method
+  APInt getMaxConstantTripMultipleImpl(const SCEV *S);
   uint32_t GetMinTrailingZerosImpl(const SCEV *S);
 
   /// Information about the number of loop iterations for which a loop exit's

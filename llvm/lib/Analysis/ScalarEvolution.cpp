@@ -6302,71 +6302,70 @@ const SCEV *ScalarEvolution::createNodeForGEP(GEPOperator *GEP) {
   return getGEPExpr(GEP, IndexExprs);
 }
 
-uint32_t ScalarEvolution::GetMinTrailingZerosImpl(const SCEV *S) {
+APInt ScalarEvolution::getMaxConstantTripMultipleImpl(const SCEV *S) {
   if (const SCEVConstant *C = dyn_cast<SCEVConstant>(S))
-    return C->getAPInt().countTrailingZeros();
+    return C->getAPInt();
 
   if (const SCEVPtrToIntExpr *I = dyn_cast<SCEVPtrToIntExpr>(S))
-    return GetMinTrailingZeros(I->getOperand());
+    return getMaxConstantTripMultiple(I->getOperand());
 
   if (const SCEVTruncateExpr *T = dyn_cast<SCEVTruncateExpr>(S))
-    return std::min(GetMinTrailingZeros(T->getOperand()),
-                    (uint32_t)getTypeSizeInBits(T->getType()));
+    return getMaxConstantTripMultiple(T->getOperand())
+        .trunc(getTypeSizeInBits(T->getType()));
 
-  if (const SCEVZeroExtendExpr *E = dyn_cast<SCEVZeroExtendExpr>(S)) {
-    uint32_t OpRes = GetMinTrailingZeros(E->getOperand());
-    return OpRes == getTypeSizeInBits(E->getOperand()->getType())
-               ? getTypeSizeInBits(E->getType())
-               : OpRes;
-  }
+  if (const SCEVZeroExtendExpr *E = dyn_cast<SCEVZeroExtendExpr>(S))
+    return getMaxConstantTripMultiple(E->getOperand())
+        .zext(getTypeSizeInBits(E->getType()));
 
-  if (const SCEVSignExtendExpr *E = dyn_cast<SCEVSignExtendExpr>(S)) {
-    uint32_t OpRes = GetMinTrailingZeros(E->getOperand());
-    return OpRes == getTypeSizeInBits(E->getOperand()->getType())
-               ? getTypeSizeInBits(E->getType())
-               : OpRes;
-  }
+  if (const SCEVSignExtendExpr *E = dyn_cast<SCEVSignExtendExpr>(S))
+    return getMaxConstantTripMultiple(E->getOperand())
+        .sext(getTypeSizeInBits(E->getType()));
 
   if (const SCEVMulExpr *M = dyn_cast<SCEVMulExpr>(S)) {
-    // The result is the sum of all operands results.
-    uint32_t SumOpRes = GetMinTrailingZeros(M->getOperand(0));
-    uint32_t BitWidth = getTypeSizeInBits(M->getType());
-    for (unsigned i = 1, e = M->getNumOperands();
-         SumOpRes != BitWidth && i != e; ++i)
-      SumOpRes =
-          std::min(SumOpRes + GetMinTrailingZeros(M->getOperand(i)), BitWidth);
-    return SumOpRes;
+    // The result is the product of all operand results.
+    // TODO: how to deal with overflow?
+    APInt Res(M->getType()->getScalarSizeInBits(), 1);
+    for (unsigned I = 0, E = M->getNumOperands(); I != E; ++I) {
+        Res = Res * getMaxConstantTripMultiple(M->getOperand(I));
+    }
+    return Res;
   }
 
-  if (isa<SCEVAddExpr>(S) || isa<SCEVAddRecExpr>(S) || isa<SCEVMinMaxExpr>(S) ||
-      isa<SCEVSequentialMinMaxExpr>(S)) {
-    // The result is the min of all operands results.
-    const SCEVNAryExpr *M = cast<SCEVNAryExpr>(S);
-    uint32_t MinOpRes = GetMinTrailingZeros(M->getOperand(0));
-    for (unsigned I = 1, E = M->getNumOperands(); MinOpRes && I != E; ++I)
-      MinOpRes = std::min(MinOpRes, GetMinTrailingZeros(M->getOperand(I)));
-    return MinOpRes;
+  if (isa<SCEVAddExpr>(S) || isa<SCEVAddRecExpr>(S) || isa<SCEVMinMaxExpr>(S)
+        || isa<SCEVSequentialMinMaxExpr>(S)) {
+    // The result is GCD of all operands results.
+    const SCEVNAryExpr *N = cast<SCEVNAryExpr>(S);
+    APInt Res = getMaxConstantTripMultiple(N->getOperand(0));
+    for (unsigned I = 1, E = N->getNumOperands(); I != E; ++I) {
+      Res = APIntOps::GreatestCommonDivisor(Res, getMaxConstantTripMultiple(N->getOperand(I)));
+    }
+    return Res;
   }
 
   if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(S)) {
-    // For a SCEVUnknown, ask ValueTracking.
+    // For a SCEVUnknown, ask ValueTracking for known bits.
     KnownBits Known = computeKnownBits(U->getValue(), getDataLayout(), 0, &AC, nullptr, &DT);
-    return Known.countMinTrailingZeros();
+    APInt Res(getTypeSizeInBits(S->getType()), std::max((uint64_t) 1, (uint64_t) 1 << Known.countMinTrailingZeros()));
+    return Res;
   }
 
-  // SCEVUDivExpr
-  return 0;
+  return APInt(getTypeSizeInBits(S->getType()), 1);
+}
+
+APInt ScalarEvolution::getMaxConstantTripMultiple(const SCEV *S) {
+  auto I = MaxConstantTripMultipleCache.find(S);
+  if (I != MaxConstantTripMultipleCache.end())
+    return I->second;
+
+  APInt Multiple = getMaxConstantTripMultipleImpl(S);
+  auto InsertPair = MaxConstantTripMultipleCache.insert({S, Multiple});
+  assert(InsertPair.second && "Should insert a new key");
+  return Multiple;
 }
 
 uint32_t ScalarEvolution::GetMinTrailingZeros(const SCEV *S) {
-  auto I = MinTrailingZerosCache.find(S);
-  if (I != MinTrailingZerosCache.end())
-    return I->second;
-
-  uint32_t Result = GetMinTrailingZerosImpl(S);
-  auto InsertPair = MinTrailingZerosCache.insert({S, Result});
-  assert(InsertPair.second && "Should insert a new key");
-  return InsertPair.first->second;
+  return std::min(getMaxConstantTripMultiple(S).countTrailingZeros(),
+                  (unsigned)getTypeSizeInBits(S->getType()));
 }
 
 /// Helper method to assign a range to V from metadata present in the IR.
@@ -8409,7 +8408,7 @@ void ScalarEvolution::forgetAllLoops() {
   SignedRanges.clear();
   ExprValueMap.clear();
   HasRecMap.clear();
-  MinTrailingZerosCache.clear();
+  MaxConstantTripMultipleCache.clear();
   PredicatedSCEVRewrites.clear();
   FoldCache.clear();
   FoldCacheUser.clear();
@@ -13396,7 +13395,7 @@ ScalarEvolution::ScalarEvolution(ScalarEvolution &&Arg)
       PendingLoopPredicates(std::move(Arg.PendingLoopPredicates)),
       PendingPhiRanges(std::move(Arg.PendingPhiRanges)),
       PendingMerges(std::move(Arg.PendingMerges)),
-      MinTrailingZerosCache(std::move(Arg.MinTrailingZerosCache)),
+      MaxConstantTripMultipleCache(std::move(Arg.MaxConstantTripMultipleCache)),
       BackedgeTakenCounts(std::move(Arg.BackedgeTakenCounts)),
       PredicatedBackedgeTakenCounts(
           std::move(Arg.PredicatedBackedgeTakenCounts)),
@@ -13893,7 +13892,7 @@ void ScalarEvolution::forgetMemoizedResultsImpl(const SCEV *S) {
   UnsignedRanges.erase(S);
   SignedRanges.erase(S);
   HasRecMap.erase(S);
-  MinTrailingZerosCache.erase(S);
+  MaxConstantTripMultipleCache.erase(S);
 
   if (auto *AR = dyn_cast<SCEVAddRecExpr>(S)) {
     UnsignedWrapViaInductionTried.erase(AR);
