@@ -712,6 +712,77 @@ func.func @affine_2mm_fused(%arg0: memref<1024x1024xf32>, %arg1: memref<1024x102
   affine.for %i4 = 0 to 1024 {
     affine.for %i5 = 0 to 1024 {
       affine.for %i6 = 0 to 1024 {
+        %0 = affine.load %arg0[%i4, %i6] : memref<1024x1024xf32>
+        %1 = affine.load %arg1[%i6, %i5] : memref<1024x1024xf32>
+        %2 = arith.mulf %1, %0 : f32
+        %3 = affine.load %arg2[%i4, %i5] : memref<1024x1024xf32>
+        %4 = arith.addf %3, %2 : f32
+        affine.store %4, %arg2[%i4, %i5] : memref<1024x1024xf32>
+      }
+    }
+  }
+  affine.for %i7 = 0 to 1024 {
+    affine.for %i8 = 0 to 1024 {
+      affine.for %i9 = 0 to 1024 {
+        %5 = affine.load %arg0[%i7, %i9] : memref<1024x1024xf32>
+        %6 = affine.load %arg1[%i9, %i8] : memref<1024x1024xf32>
+        %7 = arith.mulf %6, %5 : f32
+        %8 = affine.load %arg4[%i7, %i8] : memref<1024x1024xf32>
+        %9 = arith.addf %8, %7 : f32
+        affine.store %9, %arg4[%i7, %i8] : memref<1024x1024xf32>
+      }
+    }
+  }
+
+  // Should fuse MM initialization loops into their consumers, then fuse the
+  // two matmul loops together for input reuse on '%arg0/%arg1'.
+
+  // CHECK:        affine.for %{{.*}} = 0 to 1024 {
+  // CHECK-NEXT:     affine.for %{{.*}} = 0 to 1024 {
+  // CHECK-NEXT:       affine.store %{{.*}}, %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
+  // CHECK-NEXT:       affine.for %{{.*}} = 0 to 1024 {
+  // CHECK-NEXT:         affine.load %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
+  // CHECK-NEXT:         affine.load %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
+  // CHECK-NEXT:         arith.mulf %{{.*}}, %{{.*}} : f32
+  // CHECK-NEXT:         affine.load %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
+  // CHECK-NEXT:         arith.addf %{{.*}}, %{{.*}} : f32
+  // CHECK-NEXT:         affine.store %{{.*}}, %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
+  // CHECK-NEXT:       }
+  // CHECK-NEXT:     }
+  // CHECK-NEXT:     affine.for %{{.*}} = 0 to 1024 {
+  // CHECK-NEXT:       affine.store %{{.*}}, %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
+  // CHECK-NEXT:       affine.for %{{.*}} = 0 to 1024 {
+  // CHECK-NEXT:         affine.load %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
+  // CHECK-NEXT:         affine.load %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
+  // CHECK-NEXT:         arith.mulf %{{.*}}, %{{.*}} : f32
+  // CHECK-NEXT:         affine.load %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
+  // CHECK-NEXT:         arith.addf %{{.*}}, %{{.*}} : f32
+  // CHECK-NEXT:         affine.store %{{.*}}, %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
+  // CHECK-NEXT:       }
+  // CHECK-NEXT:     }
+  // CHECK-NEXT:   }
+
+  return
+}
+
+// -----
+
+// Same as @affine_2mm_fused above, but we load %arg1 before %arg0. The current profitability check determines fusion is unprofitable.
+func.func @affine_2mm_fused(%arg0: memref<1024x1024xf32>, %arg1: memref<1024x1024xf32>, %arg2: memref<1024x1024xf32>, %arg3: memref<1024x1024xf32>, %arg4: memref<1024x1024xf32>) {
+  %cst = arith.constant 0.000000e+00 : f32
+  affine.for %i0 = 0 to 1024 {
+    affine.for %i1 = 0 to 1024 {
+      affine.store %cst, %arg2[%i0, %i1] : memref<1024x1024xf32>
+    }
+  }
+  affine.for %i2 = 0 to 1024 {
+    affine.for %i3 = 0 to 1024 {
+      affine.store %cst, %arg4[%i2, %i3] : memref<1024x1024xf32>
+    }
+  }
+  affine.for %i4 = 0 to 1024 {
+    affine.for %i5 = 0 to 1024 {
+      affine.for %i6 = 0 to 1024 {
         %0 = affine.load %arg1[%i6, %i5] : memref<1024x1024xf32>
         %1 = affine.load %arg0[%i4, %i6] : memref<1024x1024xf32>
         %2 = arith.mulf %1, %0 : f32
@@ -749,6 +820,8 @@ func.func @affine_2mm_fused(%arg0: memref<1024x1024xf32>, %arg1: memref<1024x102
   // CHECK-NEXT:         affine.store %{{.*}}, %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
   // CHECK-NEXT:       }
   // CHECK-NEXT:     }
+  // CHECK-NEXT:   }
+  // CHECK-NEXT:   affine.for %{{.*}} = 0 to 1024 {
   // CHECK-NEXT:     affine.for %{{.*}} = 0 to 1024 {
   // CHECK-NEXT:       affine.store %{{.*}}, %{{.*}}[%{{.*}}, %{{.*}}] : memref<1024x1024xf32>
   // CHECK-NEXT:       affine.for %{{.*}} = 0 to 1024 {

@@ -1,4 +1,5 @@
 // RUN: mlir-opt -allow-unregistered-dialect %s -pass-pipeline='builtin.module(func.func(affine-loop-fusion{mode=producer}))' -split-input-file | FileCheck %s --check-prefix=PRODUCER-CONSUMER
+// RUN: mlir-opt -allow-unregistered-dialect %s -pass-pipeline='builtin.module(func.func(affine-loop-fusion{fusion-maximal mode=sibling}))' -split-input-file | FileCheck %s --check-prefix=SIBLING
 // RUN: mlir-opt -allow-unregistered-dialect %s -pass-pipeline='builtin.module(func.func(affine-loop-fusion{fusion-maximal mode=sibling}))' -split-input-file | FileCheck %s --check-prefix=SIBLING-MAXIMAL
 
 // Part I of fusion tests in  mlir/test/Transforms/loop-fusion.mlir.
@@ -190,3 +191,36 @@ func.func @fusion_for_multiple_blocks() {
   // PRODUCER-CONSUMER-NEXT: }
   return
 }
+
+// -----
+
+// SIBLING-LABEL: func @sibling_fuse_alloc_from_func() {
+func.func @sibling_fuse_alloc_from_func() {
+  %input = memref.alloc() : memref<10xf32>
+  %output = memref.alloc() : memref<10xf32>
+  %reduc = memref.alloc() : memref<10xf32>
+  %zero = arith.constant 0. : f32
+  %one = arith.constant 1. : f32
+  affine.for %i = 0 to 10 {
+    %0 = affine.load %input[%i] : memref<10xf32>
+    %2 = arith.addf %0, %one : f32
+    affine.store %2, %output[%i] : memref<10xf32>
+  }
+  affine.for %i = 0 to 10 {
+    %0 = affine.load %input[%i] : memref<10xf32>
+    %1 = affine.load %reduc[0] : memref<10xf32>
+    %2 = arith.addf %0, %1 : f32
+    affine.store %2, %reduc[0] : memref<10xf32>
+  }
+  return
+}
+
+// SIBLING:       affine.for %{{.*}} = 0 to 10 {
+// SIBLING-NEXT:    affine.load %{{.*}}[%{{.*}}] : memref<10xf32>
+// SIBLING-NEXT:    arith.addf %{{.*}}, %{{.*}} : f32
+// SIBLING-NEXT:    affine.store %{{.*}}, %{{.*}}[%{{.*}}] : memref<10xf32>
+// SIBLING-NEXT:    affine.load %{{.*}}[%{{.*}}] : memref<10xf32>
+// SIBLING-NEXT:    affine.load %{{.*}}[0] : memref<10xf32>
+// SIBLING-NEXT:    arith.addf %{{.*}}, %{{.*}} : f32
+// SIBLING-NEXT:    affine.store %{{.*}}, %{{.*}}[0] : memref<10xf32>
+// SIBLING-NEXT:  }

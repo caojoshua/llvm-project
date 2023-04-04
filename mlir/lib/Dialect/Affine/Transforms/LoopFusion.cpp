@@ -1351,37 +1351,31 @@ public:
     };
 
     // Search for siblings which load the same memref block argument.
-    Block *block = dstNode->op->getBlock();
-    for (unsigned i = 0, e = block->getNumArguments(); i != e; ++i) {
-      for (Operation *user : block->getArgument(i).getUsers()) {
-        auto loadOp = dyn_cast<AffineReadOpInterface>(user);
-        if (!loadOp)
-          continue;
-        // Gather loops surrounding 'use'.
-        SmallVector<AffineForOp, 4> loops;
-        getAffineForIVs(*user, &loops);
-        // Skip 'use' if it is not within a loop nest.
-        if (loops.empty())
-          continue;
-        Node *sibNode = mdg->getForOpNode(loops[0]);
-        assert(sibNode != nullptr);
-        // Skip 'use' if it not a sibling to 'dstNode'.
-        if (sibNode->id == dstNode->id)
-          continue;
-        // Skip 'use' if it has been visited.
-        if (visitedSibNodeIds->count(sibNode->id) > 0)
-          continue;
-        // Skip 'use' if it does not load from the same memref as 'dstNode'.
-        auto memref = loadOp.getMemRef();
-        if (dstNode->getLoadOpCount(memref) == 0)
-          continue;
-        // Check if 'sibNode/dstNode' can be input-reuse fused on 'memref'.
-        if (canFuseWithSibNode(sibNode, memref)) {
-          visitedSibNodeIds->insert(sibNode->id);
-          idAndMemrefToFuse->first = sibNode->id;
-          idAndMemrefToFuse->second = memref;
-          return true;
+    DenseSet<Value> dstLoadMemrefSet;
+    for (Operation *loadOp : dstNode->loads)
+      dstLoadMemrefSet.insert(cast<AffineReadOpInterface>(loadOp).getMemRef());
+    for (auto &idAndNode : mdg->nodes) {
+      Node* sibNode = &idAndNode.second;
+      if (visitedSibNodeIds->count(sibNode->id) > 0 || sibNode == dstNode ||
+          !isa<AffineForOp>(sibNode->op))
+        continue;
+      // Skip sibNode if it does not load a same memref as dstNode
+      Operation *loadOp = nullptr;
+      for (Operation *sibLoadOp : sibNode->loads) {
+        if (dstLoadMemrefSet.contains(
+                cast<AffineReadOpInterface>(sibLoadOp).getMemRef())) {
+          loadOp = sibLoadOp;
+          break;
         }
+      }
+      if (!loadOp)
+        continue;
+      auto memref = cast<AffineReadOpInterface>(loadOp).getMemRef();
+      if (canFuseWithSibNode(sibNode, memref)) {
+        visitedSibNodeIds->insert(sibNode->id);
+        idAndMemrefToFuse->first = sibNode->id;
+        idAndMemrefToFuse->second = memref;
+        return true;
       }
     }
 
