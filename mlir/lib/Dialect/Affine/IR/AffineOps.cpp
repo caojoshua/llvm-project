@@ -20,6 +20,7 @@
 #include "mlir/Transforms/InliningUtils.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SmallBitVector.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Debug.h"
 #include <numeric>
@@ -2521,6 +2522,160 @@ Speculation::Speculatability AffineForOp::getSpeculatability() {
   // needed.
   return getStep() == 1 ? Speculation::RecursivelySpeculatable
                         : Speculation::NotSpeculatable;
+}
+
+bool isOpLoopInvariant(AffineForOp parentForOp, Operation &op);
+
+bool AffineForOp::isLoopInvariant(Operation *op) {
+  return isOpLoopInvariant(*this, *op);
+}
+
+// Checks if all ops in a region (i.e. list of blocks) are loop invariant.
+bool areAllOpsInTheBlockListInvariant(Region &blockList, AffineForOp parentForOp) {
+  for (auto &b : blockList) {
+    for (auto &op : b) {
+      if (!isOpLoopInvariant(parentForOp, op))
+        return false;
+    }
+  }
+
+  return true;
+}
+
+// Returns true if the affine.if op can be hoisted.
+bool checkInvarianceOfNestedIfOps(AffineIfOp ifOp, AffineForOp parentForOp) {
+  if (!areAllOpsInTheBlockListInvariant(ifOp.getThenRegion(), parentForOp))
+    return false;
+
+  if (!areAllOpsInTheBlockListInvariant(ifOp.getElseRegion(), parentForOp))
+    return false;
+
+  return true;
+}
+//
+void getAffineForIVs(Operation &op, SmallVectorImpl<AffineForOp> *loops) {
+  auto *currOp = op.getParentOp();
+  AffineForOp currAffineForOp;
+  // Traverse up the hierarchy collecting all 'affine.for' operation while
+  // skipping over 'affine.if' operations.
+  while (currOp) {
+    if (AffineForOp currAffineForOp = dyn_cast<AffineForOp>(currOp))
+      loops->push_back(currAffineForOp);
+    currOp = currOp->getParentOp();
+  }
+  std::reverse(loops->begin(), loops->end());
+}
+// Returns true if the individual op is loop invariant.
+bool isOpLoopInvariant(AffineForOp parentForOp, Operation &op) {
+  auto indVar = parentForOp.getInductionVar();
+  ValueRange iterArgs = parentForOp.getRegionIterArgs();
+  SmallPtrSet<Operation *, 8> opsWithUsers;
+  SmallPtrSet<Operation *, 8> opsToHoist;
+
+  if (auto ifOp = dyn_cast<AffineIfOp>(op)) {
+    if (!checkInvarianceOfNestedIfOps(ifOp, parentForOp))
+      return false;
+  } else if (auto forOp = dyn_cast<AffineForOp>(op)) {
+    llvm::outs() << "found forOp\n";
+    if (!areAllOpsInTheBlockListInvariant(forOp.getLoopBody(), forOp))
+      return false;
+  } else if (auto parOp = dyn_cast<AffineParallelOp>(op)) {
+    if (!areAllOpsInTheBlockListInvariant(parOp.getLoopBody(), forOp))
+      return false;
+  } else if (isa<AffineDmaStartOp, AffineDmaWaitOp>(op)) {
+    // TODO: Support DMA ops.
+    // FIXME: This should be fixed to not special-case these affine DMA ops but
+    // instead rely on side effects.
+    return false;
+  } else if (op.getNumRegions() > 0) {
+    // We can't handle region-holding ops we don't know about.
+    return false;
+  } else if (!matchPattern(&op, m_Constant())) {
+    // Register op in the set of ops that have users.
+    opsWithUsers.insert(&op);
+    if (isa<AffineMapAccessInterface>(op)) {
+      auto read = dyn_cast<AffineReadOpInterface>(op);
+      Value memref = read ? read.getMemRef()
+                          : cast<AffineWriteOpInterface>(op).getMemRef();
+      for (auto *user : memref.getUsers()) {
+        // If this memref has a user that is a DMA, give up because these
+        // operations write to this memref.
+        if (isa<AffineDmaStartOp, AffineDmaWaitOp>(user))
+          return false;
+        // If the memref used by the load/store is used in a store elsewhere in
+        // the loop nest, we do not hoist. Similarly, if the memref used in a
+        // load is also being stored too, we do not hoist the load.
+        if (isa<AffineWriteOpInterface>(user) ||
+            (isa<AffineReadOpInterface>(user) &&
+             isa<AffineWriteOpInterface>(op))) {
+          if (&op != user) {
+            SmallVector<AffineForOp, 8> userIVs;
+            getAffineForIVs(*user, &userIVs);
+            // Check that userIVs don't contain the for loop around the op.
+            if (llvm::is_contained(userIVs, getForInductionVarOwner(indVar)))
+              return false;
+          }
+        }
+      }
+    }
+
+    if (op.getNumOperands() == 0 && !isa<AffineYieldOp>(op)) {
+      LLVM_DEBUG(llvm::dbgs() << "Non-constant op with 0 operands\n");
+      return false;
+    }
+  }
+
+  // Check operands.
+  for (unsigned int i = 0; i < op.getNumOperands(); ++i) {
+    auto *operandSrc = op.getOperand(i).getDefiningOp();
+
+    LLVM_DEBUG(
+        op.getOperand(i).print(llvm::dbgs() << "Iterating on operand\n"));
+
+    // If the loop IV is the operand, this op isn't loop invariant.
+    if (indVar == op.getOperand(i)) {
+      LLVM_DEBUG(llvm::dbgs() << "Loop IV is the operand\n");
+      return false;
+    }
+
+    // If the one of the iter_args is the operand, this op isn't loop invariant.
+    if (llvm::is_contained(iterArgs, op.getOperand(i))) {
+      LLVM_DEBUG(llvm::dbgs() << "One of the iter_args is the operand\n");
+      return false;
+    }
+
+    /* if (!((LoopLikeOpInterface)parentForOp).isLoopInvariant(&op)) */
+    /*   return false; */
+    // How to call LoopLikeOpInterface::isLoopInvariant?
+    llvm::outs() << "print ops for " << op << "\n";
+    auto walkFn = [&](Operation *child) {
+      for (Value operand : child->getOperands()) {
+        llvm::outs() << "  " << operand << "\n";
+        // Ignore values defined in a nested region.
+        if (op.isAncestor(operand.getParentRegion()->getParentOp()))
+          continue;
+        if (!parentForOp.isDefinedOutsideOfLoop(operand))
+          return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    };
+    if (op.walk(walkFn).wasInterrupted())
+      return false;
+
+    if (operandSrc) {
+      LLVM_DEBUG(llvm::dbgs() << *operandSrc << "Iterating on operand src\n");
+
+      // If the value was defined in the loop (outside of the if/else region),
+      // and that operation itself wasn't meant to be hoisted, then mark this
+      // operation loop dependent.
+      if (opsWithUsers.count(operandSrc) && opsToHoist.count(operandSrc) == 0)
+        return false;
+    }
+  }
+
+  // If no operand was loop variant, mark this op for motion.
+  opsToHoist.insert(&op);
+  return true;
 }
 
 /// Returns true if the provided value is the induction variable of a

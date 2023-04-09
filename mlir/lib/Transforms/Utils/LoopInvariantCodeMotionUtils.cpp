@@ -21,39 +21,14 @@
 
 using namespace mlir;
 
-/// Checks whether the given op can be hoisted by checking that
-/// - the op and none of its contained operations depend on values inside of the
-///   loop (by means of calling definedOutside).
-/// - the op has no side-effects.
-static bool canBeHoisted(Operation *op,
-                         function_ref<bool(Value)> definedOutside) {
-  // Do not move terminators.
-  if (op->hasTrait<OpTrait::IsTerminator>())
-    return false;
-
-  // Walk the nested operations and check that all used values are either
-  // defined outside of the loop or in a nested region, but not at the level of
-  // the loop body.
-  auto walkFn = [&](Operation *child) {
-    for (Value operand : child->getOperands()) {
-      // Ignore values defined in a nested region.
-      if (op->isAncestor(operand.getParentRegion()->getParentOp()))
-        continue;
-      if (!definedOutside(operand))
-        return WalkResult::interrupt();
-    }
-    return WalkResult::advance();
-  };
-  return !op->walk(walkFn).wasInterrupted();
-}
-
 size_t mlir::moveLoopInvariantCode(
-    RegionRange regions,
+    LoopLikeOpInterface loopLike,
     function_ref<bool(Value, Region *)> isDefinedOutsideRegion,
     function_ref<bool(Operation *, Region *)> shouldMoveOutOfRegion,
     function_ref<void(Operation *, Region *)> moveOutOfRegion) {
   size_t numMoved = 0;
 
+  RegionRange regions = &loopLike.getLoopBody();
   for (Region *region : regions) {
     LLVM_DEBUG(llvm::dbgs() << "Original loop:\n"
                             << *region->getParentOp() << "\n");
@@ -63,10 +38,6 @@ size_t mlir::moveLoopInvariantCode(
     for (Operation &op : region->getOps())
       worklist.push(&op);
 
-    auto definedOutside = [&](Value value) {
-      return isDefinedOutsideRegion(value, region);
-    };
-
     while (!worklist.empty()) {
       Operation *op = worklist.front();
       worklist.pop();
@@ -75,8 +46,9 @@ size_t mlir::moveLoopInvariantCode(
         continue;
 
       LLVM_DEBUG(llvm::dbgs() << "Checking op: " << *op << "\n");
-      if (!shouldMoveOutOfRegion(op, region) ||
-          !canBeHoisted(op, definedOutside))
+      llvm::outs() << "is spec: " << isSpeculatable(op) << "\n";
+      llvm::outs() << "is mem: " << isMemoryEffectFree(op) << "\n";
+      if (!shouldMoveOutOfRegion(op, region) || !loopLike.isLoopInvariant(op))
         continue;
 
       LLVM_DEBUG(llvm::dbgs() << "Moving loop-invariant op: " << *op << "\n");
@@ -96,12 +68,13 @@ size_t mlir::moveLoopInvariantCode(
 
 size_t mlir::moveLoopInvariantCode(LoopLikeOpInterface loopLike) {
   return moveLoopInvariantCode(
-      &loopLike.getLoopBody(),
+      loopLike,
       [&](Value value, Region *) {
         return loopLike.isDefinedOutsideOfLoop(value);
       },
       [&](Operation *op, Region *) {
-        return isMemoryEffectFree(op) && isSpeculatable(op);
+        // Would really like to move this logic to `isLoopInvariant`...
+        return isMemoryEffectFree(op) && isSpeculatable(op) && !op->hasTrait<OpTrait::IsTerminator>();
       },
       [&](Operation *op, Region *) { loopLike.moveOutOfLoop(op); });
 }

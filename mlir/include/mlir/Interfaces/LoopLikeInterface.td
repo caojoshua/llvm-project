@@ -103,6 +103,8 @@ def LoopLikeOpInterface : OpInterface<"LoopLikeOpInterface"> {
     /// can either be because the block is nested inside a LoopLikeInterface, or
     /// because the control flow graph is cyclic
     static bool blockIsInLoop(Block *block);
+
+    bool isLoopInvariant(Operation *op);
   }];
 }
 

@@ -51,3 +51,27 @@ bool LoopLikeOpInterface::blockIsInLoop(Block *block) {
   }
   return false;
 }
+
+bool LoopLikeOpInterface::isLoopInvariant(Operation *op) {
+  // Would really like to use isSpeculatable and isMemoryEffectFree here, but
+  // they are from other interfaces, and each interface is linked into
+  // independent libraries
+  /* if (isSpeculatable(op) || isMemoryEffectFree(op) ||
+   * op->hasTrait<OpTrait::IsTerminator>()) */
+  /*   return false; */
+
+  // Walk the nested operations and check that all used values are either
+  // defined outside of the loop or in a nested region, but not at the level of
+  // the loop body.
+  auto walkFn = [&](Operation *child) {
+    for (Value operand : child->getOperands()) {
+      // Ignore values defined in a nested region.
+      if (op->isAncestor(operand.getParentRegion()->getParentOp()))
+        continue;
+      if (!isDefinedOutsideOfLoop(operand))
+        return WalkResult::interrupt();
+    }
+    return WalkResult::advance();
+  };
+  return !op->walk(walkFn).wasInterrupted();
+}

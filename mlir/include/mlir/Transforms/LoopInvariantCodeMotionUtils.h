@@ -61,7 +61,7 @@ class Value;
 ///
 /// Returns the number of operations moved.
 size_t moveLoopInvariantCode(
-    RegionRange regions,
+    LoopLikeOpInterface loopLike,
     function_ref<bool(Value, Region *)> isDefinedOutsideRegion,
     function_ref<bool(Operation *, Region *)> shouldMoveOutOfRegion,
     function_ref<void(Operation *, Region *)> moveOutOfRegion);

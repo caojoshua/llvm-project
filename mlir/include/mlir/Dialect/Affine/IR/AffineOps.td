@@ -355,6 +355,8 @@ def AffineForOp : Affine_Op<"for",
 
     /// Interface method for ConditionallySpeculatable.
     Speculation::Speculatability getSpeculatability();
+
+    bool isLoopInvariant(Operation *op);
   }];
 
   let hasCanonicalizer = 1;
