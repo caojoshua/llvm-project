@@ -623,6 +623,8 @@ static SmallVector<SymbolScope, 2> collectSymbolScopes(Operation *symbol,
   bool collectedAllReferences = succeeded(
       collectValidReferencesFor(symbol, symName, commonAncestor, references));
 
+  if (!collectedAllReferences)
+    return {};
   // Handle the case where the common ancestor is 'limit'.
   if (commonAncestor == limit) {
     SmallVector<SymbolScope, 2> scopes;
@@ -641,8 +643,6 @@ static SmallVector<SymbolScope, 2> collectSymbolScopes(Operation *symbol,
   // Otherwise, we just need the symbol reference for 'symbol' that will be
   // used within 'limit'. This is the last reference in the list we computed
   // above if we were able to collect all references.
-  if (!collectedAllReferences)
-    return {};
   return {{references.back(), limit}};
 }
 static SmallVector<SymbolScope, 2> collectSymbolScopes(Operation *symbol,

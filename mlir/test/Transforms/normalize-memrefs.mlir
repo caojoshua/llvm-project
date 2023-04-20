@@ -27,6 +27,35 @@ func.func @permute() {
 // CHECK-NEXT: memref.dealloc [[MEM]]
 // CHECK-NEXT: return
 
+// CHECK-LABEL: func.func @permute_nested_func
+func.func @permute_nested_func() {
+  func.func @permute_inner() {
+    %A = memref.alloc() : memref<64x256xf32, affine_map<(d0, d1) -> (d1, d0)>>
+    affine.for %i = 0 to 64 {
+      affine.for %j = 0 to 256 {
+        %1 = affine.load %A[%i, %j] : memref<64x256xf32, affine_map<(d0, d1) -> (d1, d0)>>
+        "prevent.dce"(%1) : (f32) -> ()
+      }
+    }
+    memref.dealloc %A : memref<64x256xf32, affine_map<(d0, d1) -> (d1, d0)>>
+    return
+  }
+  return
+}
+
+// The old memref alloc should disappear in the nested function.
+// CHECK-NOT:  memref<64x256xf32>
+// CHECK:      func @permute_inner
+// CHECK-NEXT: [[MEM:%[0-9a-zA-Z_]+]] = memref.alloc() : memref<256x64xf32>
+// CHECK-NEXT: affine.for %[[I:arg[0-9a-zA-Z_]+]] = 0 to 64 {
+// CHECK-NEXT:   affine.for %[[J:arg[0-9a-zA-Z_]+]] = 0 to 256 {
+// CHECK-NEXT:     affine.load [[MEM]][%[[J]], %[[I]]] : memref<256x64xf32>
+// CHECK-NEXT:     "prevent.dce"
+// CHECK-NEXT:   }
+// CHECK-NEXT: }
+// CHECK-NEXT: memref.dealloc [[MEM]]
+// CHECK-NEXT: return
+
 // CHECK-LABEL: func @shift
 func.func @shift(%idx : index) {
   // CHECK-NEXT: memref.alloc() : memref<65xf32>
