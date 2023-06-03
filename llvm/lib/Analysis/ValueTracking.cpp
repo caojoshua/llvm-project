@@ -5643,10 +5643,10 @@ static bool isSameUnderlyingObjectInLoop(const PHINode *PN,
   return true;
 }
 
-static const Value *getUnderlyingObjectVisit(const Value *Root, unsigned Count, unsigned MaxLookup) {
+static const Value *
+getUnderlyingObjectVisit(const Value *Root, unsigned Count, unsigned MaxLookup) {
   const Value *V = Root;
-  if (!V->getType()->isPointerTy() ||
-      (MaxLookup != 0 && Count == MaxLookup))
+  if (!V->getType()->isPointerTy() || (MaxLookup != 0 && Count == MaxLookup))
     return V;
 
   if (auto *GEP = dyn_cast<GEPOperator>(V)) {
@@ -5662,11 +5662,26 @@ static const Value *getUnderlyingObjectVisit(const Value *Root, unsigned Count, 
     V = GA->getAliasee();
   } else {
     if (auto *PHI = dyn_cast<PHINode>(V)) {
-      // Look through single-arg phi nodes created by LCSSA.
-      if (PHI->getNumIncomingValues() == 1) {
-        V = PHI->getIncomingValue(0);
-        return getUnderlyingObjectVisit(V, Count + 1, MaxLookup);
+      // We can look through Phi's if each incoming value has the same
+      // underlying object, or is the phi itself.
+      /* const Value *NewUnderlying = getUnderlyingObjectVisit( */
+      /*     PHI->getIncomingValue(0), Count + 1, MaxLookup); */
+      /* for (unsigned I = 1; I < PHI->getNumIncomingValues(); ++I) { */
+      /*   const Value *IncomingUnderlying = getUnderlyingObjectVisit( */
+            /* PHI->getIncomingValue(I), Count + 1, MaxLookup); */
+      const Value *NewUnderlying = V;
+      for (const Value *IncomingUnderlying : PHI->incoming_values()) {
+        if (IncomingUnderlying == V || IncomingUnderlying == NewUnderlying)
+          continue;
+        if (NewUnderlying == V)
+          // Found a new possible underlying object.
+          NewUnderlying = IncomingUnderlying;
+        else // IncomingUnderlying != NewUnderlying
+          // There are >=2 possible underlying objects. We cannot
+          // determine a new underlying object.
+          return V;
       }
+      V = NewUnderlying;
     } else if (auto *Call = dyn_cast<CallBase>(V)) {
       // CaptureTracking can know about special capturing properties of
       // some intrinsics like launder.invariant.group, that can't be
