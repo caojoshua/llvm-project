@@ -1447,8 +1447,8 @@ AliasResult BasicAAResult::aliasCheck(const Value *V1, LocationSize V1Size,
     return AliasResult::NoAlias; // Scalars cannot alias each other
 
   // Figure out what objects these things are pointing to if we can.
-  const Value *O1 = getUnderlyingObject(V1, MaxLookupSearchDepth);
-  const Value *O2 = getUnderlyingObject(V2, MaxLookupSearchDepth);
+  const Value *O1 = getUnderlyingObjectLookThrough(V1, MaxLookupSearchDepth);
+  const Value *O2 = getUnderlyingObjectLookThrough(V2, MaxLookupSearchDepth);
 
   // Null values in the default address space don't point to any object, so they
   // don't alias any other pointer.
