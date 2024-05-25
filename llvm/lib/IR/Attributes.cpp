@@ -526,13 +526,19 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
 
   if (hasAttribute(Attribute::UWTable)) {
     UWTableKind Kind = getUWTableKind();
-    if (Kind != UWTableKind::None) {
-      return Kind == UWTableKind::Default
-                 ? "uwtable"
-                 : ("uwtable(" +
-                    Twine(Kind == UWTableKind::Sync ? "sync" : "async") + ")")
-                       .str();
+    StringRef KindStr;
+    switch (Kind) {
+    case UWTableKind::None:
+      KindStr = "(none)";
+      break;
+    case UWTableKind::Sync:
+      KindStr = "(sync)";
+      break;
+    case UWTableKind::Default:
+      KindStr = "";
+      break;
     }
+    return ("uwtable" + KindStr).str();
   }
 
   if (hasAttribute(Attribute::AllocKind)) {

@@ -2418,7 +2418,9 @@ bool LLParser::parseOptionalUWTableKind(UWTableKind &Kind) {
   if (!EatIfPresent(lltok::lparen))
     return false;
   LocTy KindLoc = Lex.getLoc();
-  if (Lex.getKind() == lltok::kw_sync)
+  if (Lex.getKind() == lltok::kw_none)
+    Kind = UWTableKind::None;
+  else if (Lex.getKind() == lltok::kw_sync)
     Kind = UWTableKind::Sync;
   else if (Lex.getKind() == lltok::kw_async)
     Kind = UWTableKind::Async;
